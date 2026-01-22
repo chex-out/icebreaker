@@ -484,8 +484,28 @@ Make the scoring difference clear - Paik is the generous one, Anh is the tough c
                     });
 
                     if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+                        let errorMessage = `API Error (${response.status})`;
+                        try {
+                            const errorData = await response.json();
+                            console.error('API Error Details:', errorData);
+                            
+                            if (errorData.error?.type === 'authentication_error') {
+                                errorMessage = 'Authentication failed. Please check your API key is correct.';
+                            } else if (errorData.error?.type === 'permission_error') {
+                                errorMessage = 'Permission denied. Your API key may not have access to this model.';
+                            } else if (errorData.error?.type === 'invalid_request_error') {
+                                errorMessage = 'Invalid request: ' + (errorData.error?.message || 'Unknown error');
+                            } else if (response.status === 429) {
+                                errorMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+                            } else if (response.status === 402) {
+                                errorMessage = 'Insufficient credits. Please add credits to your Anthropic account at console.anthropic.com';
+                            } else {
+                                errorMessage = errorData.error?.message || errorMessage;
+                            }
+                        } catch (e) {
+                            console.error('Could not parse error:', e);
+                        }
+                        throw new Error(errorMessage);
                     }
 
                     const data = await response.json();
@@ -526,7 +546,20 @@ Make the scoring difference clear - Paik is the generous one, Anh is the tough c
 
             } catch (error) {
                 document.getElementById('loadingState').classList.add('hidden');
-                alert('Error getting judgments: ' + error.message + '\n\nPlease check your API key and try again.');
+                
+                let userMessage = 'Error getting judgments:\n\n' + error.message;
+                
+                if (error.message.includes('Failed to fetch')) {
+                    userMessage += '\n\nPossible causes:\n';
+                    userMessage += '1. Network connectivity issue\n';
+                    userMessage += '2. CORS restriction (unlikely with Anthropic API)\n';
+                    userMessage += '3. API endpoint is down\n\n';
+                    userMessage += 'Please check your internet connection and try again.';
+                } else if (error.message.includes('credits')) {
+                    userMessage += '\n\nPlease visit console.anthropic.com to add credits to your account.';
+                }
+                
+                alert(userMessage);
                 console.error('Full error:', error);
             }
         }
